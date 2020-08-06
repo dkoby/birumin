@@ -1,0 +1,34 @@
+
+Interface controls.
+    * Start track record.
+    * Pause track record.
+    * Finish track record.
+    * Keep screen on.
+    * Day/night colorscheme.
+    ? Make mark (point of interest).
+
+
+Interface display.
+    * Elapsed time -> Moving time.
+    * Distance.
+    * Current time.
+    * Current speed.
+    * Average speed.
+    * Moving distance.
+    * Elevation.
+    * Current latitude.
+    * Current longitude.
+    * Current altitude.
+    * Plus code.
+    ? Current direction.
+    * Cadence (need calculator).
+
+Options.
+    * Saving "keep screen on", "day/night".
+    ? Track saving directory.
+    * Auto/manual strava synchronization.
+    ? Polling interval.
+    ? Wait for signal before start of track record.
+    ? Auto finish track recording.
+    * Cadence properties (Chainring, cog, wheel size).
+

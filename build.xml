@@ -1,0 +1,205 @@
+<!--
+    Jaro 2020.
+    Auxtoro estas Dmitrij Kobilin. 
+    
+    Nenia rajtigilo ekzistas.
+    Faru bone, ne faru malbone.
+-->
+<project name="Birumin" basedir="." default="apk_aligned">
+    <property name="build.sysclasspath" value="last"/>
+
+    <!--
+        TODO
+        * Conditionally build based on file modification time on
+          some targets. See "uptodate" in Ant documentation.
+        * Check if ANDROID_SDK environment variable is set.
+    -->
+
+    <property environment="env" />
+
+    <condition property="build.dir" value="${env.BUILD_DIR}/${ant.project.name}/build" else="build">
+        <isset property="env.BUILD_DIR"/>
+    </condition>
+    <condition property="buildtools.version" value="${env.ANDROID_BUILD_TOOLS}" else="29.0.3">
+        <isset property="env.ANDROID_BUILD_TOOLS"/>
+    </condition>
+
+    <property name="sdk.dir"           value="${env.ANDROID_SDK}"/>
+    <property name="platform.dir"      value="${sdk.dir}/platforms/android-19"/>
+    <property name="buildtools.dir"    value="${sdk.dir}/build-tools/${buildtools.version}"/>
+    <property name="platformtools.dir" value="${sdk.dir}/platform-tools"/>
+
+    <property name="src.dir"     value="java"/>
+
+    <property name="gen.dir"         value="${build.dir}/gen"/>
+    <property name="obj.dir"         value="${build.dir}/obj"/>
+    <property name="apk.dir"         value="${build.dir}/apk"/>
+    <property name="dex.file"        value="${apk.dir}/classes.dex"/>
+    <property name="manifest.file"   value="AndroidManifest.xml"/>
+    <property name="res.dir"         value="res"/>
+    <property name="assets.dir"      value="assets"/>
+    <property name="apk.file"        value="${build.dir}/${ant.project.name}.apk"/>
+    <property name="apk.aligned.file" value="${build.dir}/${ant.project.name}.aligned.apk"/>
+
+    <property name="keytool.CN" value="Dmitrij Kobilin"/>
+
+    <property name="key.store" value="keystore.jks"/>
+    <property name="key.alias" value="androidkey"/>
+    <property name="key.pass"  value="thisKeyPassword"/>
+    <property name="store.pass" value="thisStorePassword"/>
+    <!--
+    <property name="timestamp.cert" value="-tsa http://timestamp.comodoca.com/rfc3161"/>
+    <property name="timestamp.cert" value="-tsacert alias"/>
+    <property name="timestamp.cert" value=""/>
+    -->
+    <property name="timestamp.cert" value="-tsa http://timestamp.digicert.com"/>
+
+    <property name="java.package"      value="com/dkoby/birumin"/>
+    <property name="java.package.dots" value="com.dkoby.birumin"/>
+
+    <echo message="manifest.file   : ${manifest.file}"/>
+    <echo message="src.dir         : ${src.dir}"/>
+    <echo message="assets.dir      : ${assets.dir}"/>
+    <echo message="java.package    : ${java.package}"/>
+    <echo message="build.dir       : ${build.dir}"/>
+    <echo message="buildtools.dir  : ${buildtools.dir}"/>
+    <echo message="gen.dir         : ${gen.dir}"/>
+    <echo message="obj.dir         : ${obj.dir}"/>
+    <echo message="apk.dir         : ${apk.dir}"/>
+    <echo message="dex.file        : ${dex.file}"/>
+    <echo message="apk.file        : ${apk.file}"/>
+    <echo message="apk.aligned.file : ${apk.aligned.file}"/>
+
+    <condition property="compile.debug" value="true" else="false">
+        <isset property="env.DEBUG"/>
+    </condition>
+    <property name="compile.debuglevel" value="lines,vars,source"/>
+
+    <target name="rlayout">
+        <echo message="${dex.file}"/>
+        <mkdir dir="${gen.dir}"/>
+        <exec executable="${buildtools.dir}/aapt" failonerror="true">
+            <arg value="package"/>
+            <arg value="-f"/>
+            <arg value="-m"/>
+            <arg line="-J ${gen.dir}"/>
+            <arg line="-S ${res.dir}"/>
+            <arg line="-M ${manifest.file}"/>
+            <arg line="-I ${platform.dir}/android.jar"/>
+        </exec>
+    </target> 
+
+    <target name="compile" depends="rlayout">
+        <mkdir dir="${build.dir}"/>
+        <mkdir dir="${obj.dir}"/>
+        <javac 
+            source="1.7"
+            target="1.7"
+            classpath="${platform.dir}/android.jar"
+            destdir="${obj.dir}"
+
+            srcdir="${src.dir}"
+            debug="${compile.debug}"
+            debuglevel="${compile.debuglevel}"
+        >
+                <src path="${gen.dir}/${java.package}"/>
+                <compilerarg value="-Xbootclasspath/p:${env.JAVA_HOME}/jre/lib/rt.jar"/>
+                <compilerarg value="-Xlint:unchecked"/>
+                <compilerarg value="-Xlint:deprecation"/>
+                <compilerarg value="-Xdiags:verbose"/>
+                
+        </javac>
+    </target>
+
+    <target name="dex" depends="compile">
+        <mkdir dir="${apk.dir}"/>
+        <echo message="${dex.file}"/>
+        <exec executable="${buildtools.dir}/dx" failonerror="true">
+            <arg value="--dex"/>
+            <arg value="--output=${dex.file}"/>
+            <arg value="${obj.dir}"/>
+        </exec>
+    </target>
+
+    <target name="assets">
+        <copy todir="${apk.dir}/assets">
+            <fileset dir="${assets.dir}"/>
+       </copy>
+    </target>
+
+    <target name="check-keystore-exists">
+        <available file="${key.store}" property="present.keystore"/>
+    </target>
+
+    <target name="keystore" depends="check-keystore-exists" unless="present.keystore">
+        <genkey
+            keystore="${key.store}"
+            alias="${key.alias}"
+            validity="10000"
+            keyalg="RSA"
+            keysize="2048"
+            storepass="${store.pass}"
+            keypass="${key.pass}"
+        >
+            <dname>
+                <param name="CN" value="${keytool.CN}"/>
+            </dname>
+        </genkey>
+    </target>
+
+    <target name="sign" depends="keystore, apk">
+        <!--
+        <copy file="${apk.file}" tofile="${apk.signed.file}"/>
+        -->
+        <exec executable="jarsigner">
+            <arg line="-verbose"/>
+            <arg line="-sigalg SHA1withRSA"/>
+            <arg line="-digestalg SHA1"/>
+            <arg line="-storepass ${store.pass}"/>
+            <arg line="-keypass ${key.pass}"/>
+            <arg line="-keystore ${key.store}"/>
+            <arg line="${timestamp.cert}"/>
+            <arg value="${apk.file}"/>
+            <arg value="${key.alias}"/>
+        </exec>
+    </target>
+
+    <target name="apk" depends="dex, assets">
+        <exec executable="${buildtools.dir}/aapt" failonerror="true">
+            <arg value="package"/>
+            <arg value="-f"/>
+            <arg line="-M AndroidManifest.xml"/>
+            <arg line="-S ${res.dir}"/>
+            <arg line="-I ${platform.dir}/android.jar"/>
+            <arg line="-F ${apk.file} ${apk.dir}"/>
+        </exec>
+    </target>
+    <!--
+        NOTE
+            If using "jarsigner" then sign before zipalign.
+            If use "apksigner" then after align.
+    -->
+    <target name="apk_aligned" depends="sign">
+        <exec executable="${buildtools.dir}/zipalign">
+            <arg line="-f 4"/>
+            <arg value="${apk.file}"/>
+            <arg value="${apk.aligned.file}"/> 
+        </exec>
+    </target>
+
+    <target name="install" depends="apk_aligned">
+        <exec executable="${platformtools.dir}/adb">
+            <arg line="install -r ${apk.aligned.file}"/>
+        </exec>
+    </target>
+
+    <target name="run">
+        <exec executable="${platformtools.dir}/adb">
+            <arg value="shell"/>
+            <arg value="monkey"/>
+            <arg line="-p ${java.package.dots}"/>
+            <arg line="-c android.intent.category.LAUNCHER 1"/>
+        </exec>
+    </target>
+</project>
+
