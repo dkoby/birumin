@@ -269,19 +269,27 @@ Application.prototype.applyData = function(data)
         data.latitude     = null;
         data.longitude    = null;
         data.altitude     = null;
-        data.points     = null;
+        data.points       = null;
     }
 
     if (data.points !== undefined)
         this.display.stat.points.block.setInner(data.points === null ? "-" : data.points);
     if (data.currentSpeed !== undefined)
         this.display.currentSpeed.block.setInner(util.formatSpeed(data.currentSpeed));
-    if (data.averageSpeed !== undefined)
-        this.display.averageSpeed.block.setInner(util.formatSpeed(data.averageSpeed));
     if (data.movingTime !== undefined)
         this.display.movingTime.block.setInner(util.formatTime(data.movingTime));
     if (data.distance !== undefined)
-        this.display.distance.block.setInner(util.formatSpeed(data.distance));
+    {
+        if (data.distance === null)
+        {
+            this.display.distance.block.setInner("--");
+        } else {
+            var km = data.distance / 1000;
+            this.display.distance.block.setInner(util.formatSpeed(km));
+        }
+    }
+    if (data.averageSpeed !== undefined)
+        this.display.averageSpeed.block.setInner(util.formatSpeed(data.averageSpeed));
     if (data.elevation !== undefined)
         this.display.elevation.block.setInner(
                 data.elevation === null ? "--" : data.elevation);
@@ -484,6 +492,18 @@ Application.prototype.statusUpdate = function()
                 }
                 if (stat.track.movingTime !== undefined)
                     data.movingTime = stat.track.movingTime;
+                if (stat.track.distance !== undefined)
+                    data.distance = stat.track.distance;
+                if (stat.track.distance !== undefined)
+                {
+                    data.distance = stat.track.distance;
+                    if (   stat.track.distance != 0
+                        && stat.track.movingTime !== undefined
+                        && stat.track.movingTime != 0)
+                    {
+                        data.averageSpeed = stat.track.distance / stat.track.movingTime * 3.6;
+                    }
+                }
 
                 this.applyData(data);
         }

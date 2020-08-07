@@ -285,6 +285,8 @@ class WebAppInterface {
         jt.append("movingTime", mainActivity.currentTrack.movingTime);
         jt.append("elapsedTime", mainActivity.currentTrack.movingTime);
         jt.append("elevation", mainActivity.currentTrack.elevation);
+        jt.append("distance", mainActivity.currentTrack.distance);
+
         Track.Point point = mainActivity.currentTrack.getLastPoint();
         if (point != null)
         {

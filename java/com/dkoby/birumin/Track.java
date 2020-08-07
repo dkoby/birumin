@@ -46,6 +46,7 @@ public class Track {
     public volatile long elapsedTime;
     public volatile Track.State state;
     public volatile long elevation;
+    public volatile long distance;
 
     private long startTime; 
 
@@ -69,6 +70,7 @@ public class Track {
         movingTime  = 0;
         elapsedTime = 0;
         elevation   = 0;
+        distance    = 0;
         locationManager =
             (LocationManager)mainActivity.getSystemService(Context.LOCATION_SERVICE);
 
@@ -184,6 +186,31 @@ public class Track {
         {
             if (lastPoint.altitude > altitude)
                 elevation += lastPoint.altitude - altitude;
+
+            /*
+             * set pi 3.1415926535897931
+
+             * set R 6371e3 ; # meters
+             * set phy1 [expr {$lat1 * $pi / 180}]
+             * set phy2 [expr {$lat2 * $pi / 180}]
+             * set lm1 [expr {$lon1 * $pi / 180}]
+             * set lm2 [expr {$lon2 * $pi / 180}]
+        
+             * set x [expr {($lm2 - $lm1) * cos(($phy1 + $phy2) / 2)}]
+             * set y [expr {$phy2 - $phy1}]
+             * set d [expr {sqrt($x*$x + $y*$y) * $R}]
+             */
+
+            double R = 6371e3;
+            double ph1 = lastPoint.latitude * Math.PI / 180;
+            double ph2 =           latitude * Math.PI / 180; 
+            double lm1 = lastPoint.longitude * Math.PI / 180;
+            double lm2 =           longitude * Math.PI / 180; 
+            double x = (lm2 - lm1) * Math.cos((ph1 + ph2) / 2);
+            double y = ph2 - ph1;
+            double d = Math.hypot(x, y) * R;
+
+            distance += d;
         }
 
         synchronized(this) {
