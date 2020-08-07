@@ -8,9 +8,11 @@
 package com.dkoby.birumin;
 
 import android.app.Activity;
+import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -25,6 +27,8 @@ import android.webkit.WebSettings;
 import android.webkit.WebViewClient;
 import android.webkit.WebChromeClient;
 import android.webkit.ConsoleMessage;
+import android.app.Notification;
+import android.app.NotificationManager;
 
 /*
  *
@@ -33,9 +37,14 @@ public class MainActivity extends Activity
 {
     public static final String VERSION = "BIRUMINv1";
     public static final String TAG = "BiruminLog";
+    private final String NOTIFICATION_TAG = "BIRUMIN";
+    private final int    NOTIFICATION_ID  = 1;
+
     private WebView webView;
     private MainMsgHandler msgHandler;
     public Track currentTrack;
+    private NotificationManager manager;
+    private Notification notification;
 
     public Handler getMsgHandler() {
         return msgHandler;
@@ -58,6 +67,30 @@ public class MainActivity extends Activity
 //        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
 //        getWindow().setFlags(
 //                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON, WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        {
+            manager = (NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
+            notification = new Notification();
+
+            notification.icon = R.drawable.notify;
+            notification.tickerText = "Recording";
+            notification.when = System.currentTimeMillis();
+            notification.flags = Notification.FLAG_NO_CLEAR;
+
+            Intent intent = getIntent();
+            intent.setFlags(
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP
+            );
+            PendingIntent pendIntent = PendingIntent.getActivity(
+                getApplicationContext(), 0, intent,
+                0
+            );
+
+
+            notification.setLatestEventInfo(this, "Birumin",
+                    "Record in progress", pendIntent);
+            
+        }
 
         currentTrack = new Track(MainActivity.this);
 
@@ -135,9 +168,28 @@ public class MainActivity extends Activity
     protected void onDestroy()
     {
         super.onDestroy();
+
+        hideNotification();
         Log.i(TAG, "onDestroy");
     }
-
+    /*
+     *
+     */
+    private void showNotification() {
+        manager.notify(
+            NOTIFICATION_TAG, 
+            NOTIFICATION_ID, 
+            notification
+        );
+    }
+    /*
+     *
+     */
+    private void hideNotification() {
+        manager.cancel(
+            NOTIFICATION_TAG, 
+            NOTIFICATION_ID);
+    }
     /*
      *
      */
@@ -174,6 +226,7 @@ public class MainActivity extends Activity
                     break;
                 case TRACK_START:
                     currentTrack.start();
+                    showNotification();
                     break;
                 case TRACK_PAUSE:
                     currentTrack.pause();
@@ -183,12 +236,15 @@ public class MainActivity extends Activity
                     break;
                 case TRACK_STOP:
                     currentTrack.stop();
+                    hideNotification();
                     break;
                 case TRACK_UPDATE:
                     if (currentTrack.state == Track.State.CANCEL ||
                         currentTrack.state == Track.State.DONE)
                         currentTrack = new Track(MainActivity.this);
                     webView.loadUrl("javascript:app.statusUpdate()");
+
+
                     break;
             }
         }

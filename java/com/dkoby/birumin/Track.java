@@ -49,8 +49,8 @@ public class Track {
 
     private long startTime; 
 
-    private static final long  MINTIME     = 500; /* ms */
-    private static final float MINDISTANCE = 1;   /* m */
+    private static final long  MINTIME     = 200; /* ms */
+    private static final float MINDISTANCE = 0;   /* m */
 
     private MainActivity mainActivity;
     private ArrayList<Point> points;
