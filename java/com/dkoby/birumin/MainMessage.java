@@ -16,10 +16,10 @@ public class MainMessage {
 
     public enum MsgType {
         SCREEN_ON,
-        TRACK_START,
-        TRACK_PAUSE,
-        TRACK_RESUME,
-        TRACK_STOP,
+        TRACK_CONTROL_START,
+        TRACK_CONTROL_PAUSE,
+        TRACK_CONTROL_RESUME,
+        TRACK_CONTROL_STOP,
         TRACK_UPDATE,
     }
 

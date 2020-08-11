@@ -16,6 +16,8 @@ import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
+import android.os.PowerManager;
+import android.os.PowerManager.WakeLock;
 import android.util.Log;
 import android.view.View;
 import android.view.Window;
@@ -45,6 +47,7 @@ public class MainActivity extends Activity
     public Track currentTrack;
     private NotificationManager manager;
     private Notification notification;
+    private WakeLock wakeLock;
 
     public Handler getMsgHandler() {
         return msgHandler;
@@ -67,6 +70,13 @@ public class MainActivity extends Activity
 //        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
 //        getWindow().setFlags(
 //                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON, WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+
+        {
+            PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+            wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
+                            "Birumin::WakelockTag");
+        }
 
         {
             manager = (NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
@@ -167,10 +177,24 @@ public class MainActivity extends Activity
     @Override
     protected void onDestroy()
     {
-        super.onDestroy();
+        onTrackStop();
 
-        hideNotification();
+        super.onDestroy();
         Log.i(TAG, "onDestroy");
+    }
+    /*
+     *
+     */
+    private void onTrackStart()
+    {
+        showNotification();
+    }
+    /*
+     *
+     */
+    private void onTrackStop()
+    {
+        hideNotification();
     }
     /*
      *
@@ -224,27 +248,34 @@ public class MainActivity extends Activity
                             value ? WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON : 0,
                             WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
                     break;
-                case TRACK_START:
+                case TRACK_CONTROL_START:
                     currentTrack.start();
-                    showNotification();
+                    onTrackStart();
                     break;
-                case TRACK_PAUSE:
+                case TRACK_CONTROL_PAUSE:
                     currentTrack.pause();
                     break;
-                case TRACK_RESUME:
+                case TRACK_CONTROL_RESUME:
                     currentTrack.resume();
                     break;
-                case TRACK_STOP:
+                case TRACK_CONTROL_STOP:
                     currentTrack.stop();
-                    hideNotification();
+                    onTrackStop();
                     break;
                 case TRACK_UPDATE:
+                    if (currentTrack.state == Track.State.RECORD)
+                    {
+                        if (!wakeLock.isHeld())
+                            wakeLock.acquire();
+                    } else {
+                        if (wakeLock.isHeld())
+                            wakeLock.release();
+                    }
+
                     if (currentTrack.state == Track.State.CANCEL ||
                         currentTrack.state == Track.State.DONE)
                         currentTrack = new Track(MainActivity.this);
                     webView.loadUrl("javascript:app.statusUpdate()");
-
-
                     break;
             }
         }
@@ -305,28 +336,28 @@ class WebAppInterface {
     public void startTrack() {
         mainActivity.sendMessage(
             new MainMessage(
-                MainMessage.MsgType.TRACK_START)
+                MainMessage.MsgType.TRACK_CONTROL_START)
         );
     }
     @JavascriptInterface
     public void pauseTrack() {
         mainActivity.sendMessage(
             new MainMessage(
-                MainMessage.MsgType.TRACK_PAUSE)
+                MainMessage.MsgType.TRACK_CONTROL_PAUSE)
         );
     }
     @JavascriptInterface
     public void resumeTrack() {
         mainActivity.sendMessage(
             new MainMessage(
-                MainMessage.MsgType.TRACK_RESUME)
+                MainMessage.MsgType.TRACK_CONTROL_RESUME)
         );
     }
     @JavascriptInterface
     public void stopTrack() {
         mainActivity.sendMessage(
             new MainMessage(
-                MainMessage.MsgType.TRACK_STOP)
+                MainMessage.MsgType.TRACK_CONTROL_STOP)
         );
     }
     @JavascriptInterface

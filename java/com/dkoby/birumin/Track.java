@@ -73,7 +73,6 @@ public class Track {
         distance    = 0;
         locationManager =
             (LocationManager)mainActivity.getSystemService(Context.LOCATION_SERVICE);
-
     }
     /*
      *
@@ -162,9 +161,9 @@ public class Track {
             {
                 state = Track.State.SAVE;
                 store();
-            }
-            else
+            } else {
                 state = Track.State.CANCEL;
+            }
         }
 
         mainActivity.sendMessage(new MainMessage(MainMessage.MsgType.TRACK_UPDATE));
