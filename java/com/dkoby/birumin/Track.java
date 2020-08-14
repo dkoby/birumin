@@ -14,7 +14,10 @@ import android.location.LocationManager;
 import android.location.Location;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Looper;
+import android.os.Message;
 import android.util.Log;
+import android.os.Handler;
 import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
@@ -27,6 +30,10 @@ import java.io.FileOutputStream;
  *
  */
 public class Track {
+    private static long POINT_TIMEOUT      = 15000;
+    private static final long  MINTIME     = 200; /* ms */
+    private static final float MINDISTANCE = 0;   /* m */
+
     /*
      *
      */
@@ -49,14 +56,15 @@ public class Track {
     public volatile long distance;
 
     private long startTime; 
-
-    private static final long  MINTIME     = 200; /* ms */
-    private static final float MINDISTANCE = 0;   /* m */
+    private volatile Long lastPointTime;
+    private boolean updates;
 
     private MainActivity mainActivity;
     private ArrayList<Point> points;
     private Track.LocationListener locationListener;
     private LocationManager locationManager;
+
+    private TrackLoop trackLoop;
 
     /*
      *
@@ -67,21 +75,105 @@ public class Track {
 
         state = Track.State.NEW;
 
-        movingTime  = 0;
-        elapsedTime = 0;
-        elevation   = 0;
-        distance    = 0;
         locationManager =
             (LocationManager)mainActivity.getSystemService(Context.LOCATION_SERVICE);
+
+        trackLoop = this.new TrackLoop();
     }
     /*
      *
      */
-    public void start() {
-        synchronized(this) {
-            if (state != Track.State.NEW)
-                return;
+    public Track launch() {
+        trackLoop.start();
+        return this;
+    } 
+
+    /*
+     *
+     */
+    private class TrackLoop extends Thread {
+        private volatile boolean ready;
+        private Looper looper;
+        public Handler handler;
+        /*
+         *
+         */
+        public Looper getLooper() {
+            return looper;
         }
+        /*
+         *
+         */
+        public void sendMessage(TrackMessage message) {
+            if (!ready)
+                return;
+
+            Message msg;
+
+            msg = handler.obtainMessage();
+            msg.obj = message;
+            handler.sendMessage(msg);
+        }
+        /*
+         *
+         */
+        @Override
+        public void run() {
+            Looper.prepare();
+            looper = Looper.myLooper();
+
+            handler = new Handler() {
+                @Override
+                public void handleMessage(Message msg) {
+                    TrackMessage message;
+
+//                    Log.i(MainActivity.TAG, "Track handle: " + msg);
+
+                    message = (TrackMessage)msg.obj;
+                    switch (message.msgType)
+                    {
+                        case TRACK_CONTROL_START:
+                            onCStart();
+                            break;
+                        case TRACK_CONTROL_RESUME:
+                            onCResume();
+                            break;
+                        case TRACK_CONTROL_PAUSE:
+                            onCPause();
+                            break;
+                        case TRACK_CONTROL_STOP:
+                            onCStop();
+                            ready = false;
+                            looper.quit();
+                            break;
+                        case TRACK_POINT_TIMEOUT:
+                            stopUpdates();
+                            /* XXX deffer? */
+                            startUpdates();
+                            break;
+                        case TRACK_UPDATE:
+                            mainActivity.sendMessage(new MainMessage(MainMessage.MsgType.TRACK_UPDATE));
+                            break;
+                    }
+                }
+            };
+            ready = true;
+
+            Looper.loop();
+        }
+    }
+    /*
+     *
+     */
+    public void cstart() {
+        trackLoop.sendMessage(new TrackMessage(TrackMessage.MessageType.TRACK_CONTROL_START));
+    }
+    /*
+     *
+     */
+    private void onCStart() {
+        if (state != Track.State.NEW)
+            return;
 
         Criteria criteria = new Criteria();
         criteria.setAccuracy(Criteria.ACCURACY_FINE);
@@ -100,21 +192,79 @@ public class Track {
 
         locationListener = this.new LocationListener();
 
-        synchronized(this) {
-            state = Track.State.GET_POSITION;
-        }
+        state = Track.State.GET_POSITION;
 
-        resume();
+        cresume();
     }
     /*
      *
      */
-    public void pause() {
-        synchronized(this) {
-            if (state != Track.State.RECORD)
-                return;
-            state = Track.State.PAUSE;
-            locationManager.removeUpdates(locationListener);
+    public void cpause() {
+        trackLoop.sendMessage(new TrackMessage(TrackMessage.MessageType.TRACK_CONTROL_PAUSE));
+    }
+    /*
+     *
+     */
+    public void onCPause() {
+        if (state != Track.State.RECORD)
+            return;
+        state = Track.State.PAUSE;
+
+        stopUpdates();
+
+        mainActivity.sendMessage(new MainMessage(MainMessage.MsgType.TRACK_UPDATE));
+    }
+    /*
+     *
+     */
+    public void cresume() {
+        trackLoop.sendMessage(new TrackMessage(TrackMessage.MessageType.TRACK_CONTROL_RESUME));
+    }
+    /*
+     *
+     */
+    public void onCResume() {
+        if (state != Track.State.GET_POSITION && state != Track.State.PAUSE)
+            return;
+
+        startUpdates();
+
+        if (state == Track.State.PAUSE)
+            state = Track.State.RECORD;
+
+        mainActivity.sendMessage(new MainMessage(MainMessage.MsgType.TRACK_UPDATE));
+    }
+    /*
+     *
+     */
+    public void cstop() {
+        trackLoop.sendMessage(new TrackMessage(TrackMessage.MessageType.TRACK_CONTROL_STOP));
+    }
+    /*
+     *
+     */
+    private void onCStop() {
+        if (state != Track.State.PAUSE &&
+            state != Track.State.GET_POSITION &&
+            state != Track.State.RECORD
+            )
+            return;
+
+        stopUpdates();
+
+        if (state == Track.State.PAUSE || state == Track.State.RECORD)
+        {
+            state = Track.State.SAVE;
+            mainActivity.sendMessage(new MainMessage(MainMessage.MsgType.TRACK_UPDATE));
+            try {
+                store();
+                state = Track.State.DONE;
+            } catch (Exception e) {
+                Log.e(MainActivity.TAG, "Store error: " + e);
+                state = Track.State.ERROR;
+            }
+        } else {
+            state = Track.State.CANCEL;
         }
 
         mainActivity.sendMessage(new MainMessage(MainMessage.MsgType.TRACK_UPDATE));
@@ -122,51 +272,29 @@ public class Track {
     /*
      *
      */
-    public void resume() {
-        synchronized(this) {
-            if (state != Track.State.GET_POSITION && state != Track.State.PAUSE)
-                return;
-        }
+    private void startUpdates() {
+        if (updates)
+            return;
 
         locationManager.requestLocationUpdates(
                 locationProvider,
                 MINTIME,
                 MINDISTANCE,
-                locationListener);
-
-        synchronized(this) {
-            if (state == Track.State.PAUSE)
-                state = Track.State.RECORD;
-        }
-
-        mainActivity.sendMessage(new MainMessage(MainMessage.MsgType.TRACK_UPDATE));
+                locationListener,
+                /* XXX is looper ready? */
+                trackLoop.getLooper());
+        updates = true;
     }
     /*
      *
      */
-    public void stop() {
-        synchronized(this) {
-            if (state != Track.State.PAUSE &&
-                state != Track.State.GET_POSITION &&
-                state != Track.State.RECORD
-                )
-                return;
-        }
+    private void stopUpdates() {
+        if (!updates)
+            return;
 
-        synchronized(this) {
-            if (state != Track.State.PAUSE)
-                locationManager.removeUpdates(locationListener);
-
-            if (state == Track.State.PAUSE || state == Track.State.RECORD)
-            {
-                state = Track.State.SAVE;
-                store();
-            } else {
-                state = Track.State.CANCEL;
-            }
-        }
-
-        mainActivity.sendMessage(new MainMessage(MainMessage.MsgType.TRACK_UPDATE));
+        lastPointTime = null;
+        locationManager.removeUpdates(locationListener);
+        updates = false;
     }
     /*
      *
@@ -178,8 +306,13 @@ public class Track {
             float speed,
             long time)
     {
+        boolean add;
+
+        lastPointTime = new Long(System.currentTimeMillis());
+
         Point lastPoint;
 
+        add = true;
         lastPoint = getLastPoint();
         if (lastPoint != null)
         {
@@ -209,11 +342,18 @@ public class Track {
             double y = ph2 - ph1;
             double d = Math.hypot(x, y) * R;
 
-            distance += d;
+            /* NOTE filter if distance is less then 1 meters */
+            if (d < 1.0)
+                add = false;
+
+            if (add)
+                distance += d;
         }
 
+
         synchronized(this) {
-            points.add(new Point(latitude, longitude, altitude, speed, time));
+            if (add)
+                points.add(new Point(latitude, longitude, altitude, speed, time));
         }
     }
     /*
@@ -231,45 +371,28 @@ public class Track {
      *
      */
     public int getPointsNum() {
-        return points.size();
+        synchronized(this) {
+            return points.size();
+        }
     }
     /*
      *
      */
-    private void store() {
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    File filesDir = null;
+    private void store() throws Exception {
+        File filesDir = null;
 
-                    /* Get last known storage, should be ext_sd. */
-                    for (File dir: mainActivity.getExternalFilesDirs(null))
-                        filesDir = dir;
-                    if (filesDir == null)
-                        throw new StoreException("No storage media");
+        /* Get last known storage, should be ext_sd. */
+        for (File dir: mainActivity.getExternalFilesDirs(null))
+            filesDir = dir;
+        if (filesDir == null)
+            throw new StoreException("No storage media");
 
-                    Log.i(MainActivity.TAG, "Storage dir: " + filesDir);
+        Log.i(MainActivity.TAG, "Storage dir: " + filesDir);
 
-                    if (!filesDir.exists())
-                        filesDir.mkdir();
+        if (!filesDir.exists())
+            filesDir.mkdir();
 
-                    storeData(filesDir);
-
-                    synchronized (Track.this) {
-                        state = Track.State.DONE;
-                    }
-                    mainActivity.sendMessage(new MainMessage(MainMessage.MsgType.TRACK_UPDATE));
-                } catch (Exception e) {
-                    Log.e(MainActivity.TAG, "Store error: " + e);
-
-                    synchronized (Track.this) {
-                        state = Track.State.ERROR;
-                    }
-                    mainActivity.sendMessage(new MainMessage(MainMessage.MsgType.TRACK_UPDATE));
-                }
-            }
-        }).start();
+        storeData(filesDir);
     }
     /*
      *
@@ -288,7 +411,7 @@ public class Track {
         try (FileOutputStream fos = new FileOutputStream(fileName)) {
             XMLWriter xw = Track.this.new XMLWriter(fos);
             xw.writeln("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
-            xw.writeln("<gpx creator=\"" + MainActivity.VERSION + "\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd\" version=\"1.1\" xmlns=\"http://www.topografix.com/GPX/1/1\">");
+            xw.writeln("<gpx version=\"1.1\" creator=\"" + MainActivity.VERSION + "\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd\" xmlns=\"http://www.topografix.com/GPX/1/1\">");
 
             xw.writeln("<metadata>");
             xw.write("    <time>");
@@ -399,19 +522,34 @@ public class Track {
 
                     Thread.sleep(1000);
 
-                    synchronized(Track.this) {
-                        if (state == Track.State.SAVE ||
-                            state == Track.State.DONE)
-                            return;
-                        elapsedTime++;
-                        if (state == Track.State.RECORD)
+                    if (state == Track.State.SAVE ||
+                        state == Track.State.DONE ||
+                        state == Track.State.ERROR ||
+                        state == Track.State.CANCEL
+                    ) {
+                        return;
+                    }
+
+                    elapsedTime++;
+                    if (state == Track.State.RECORD)
+                    {
+                        movingTime++;
+                        update = true;
+
+                        if (lastPointTime != null)
                         {
-                            movingTime++;
-                            update = true;
+                            long duration = System.currentTimeMillis() - lastPointTime.longValue();
+
+                            if (duration > 0 && duration >= POINT_TIMEOUT)
+                            {
+                                lastPointTime = null;
+                                trackLoop.sendMessage(new TrackMessage(TrackMessage.MessageType.TRACK_POINT_TIMEOUT));
+                            }
                         }
                     }
+
                     if (update)
-                        mainActivity.sendMessage(new MainMessage(MainMessage.MsgType.TRACK_UPDATE));
+                        trackLoop.sendMessage(new TrackMessage(TrackMessage.MessageType.TRACK_UPDATE));
                 }
             } catch (InterruptedException e) {
 
@@ -442,13 +580,11 @@ public class Track {
                 location.getSpeed(),
                 location.getTime());
 
-            synchronized(Track.this) {
-                if (state == Track.State.GET_POSITION)
-                {
-                    startTime = System.currentTimeMillis();
-                    state = Track.State.RECORD;
-                    runThread();
-                }
+            if (state == Track.State.GET_POSITION)
+            {
+                startTime = System.currentTimeMillis();
+                state = Track.State.RECORD;
+                runThread();
             }
 
             mainActivity.sendMessage(new MainMessage(MainMessage.MsgType.TRACK_UPDATE));

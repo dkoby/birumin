@@ -102,7 +102,7 @@ public class MainActivity extends Activity
             
         }
 
-        currentTrack = new Track(MainActivity.this);
+        currentTrack = (new Track(MainActivity.this)).launch();
 
         webView = new WebView(this);
 
@@ -142,7 +142,6 @@ public class MainActivity extends Activity
 
         webView.loadUrl("file:///android_asset/index.html");
         setContentView(webView);
-//        (new Thread((new TimeThread()))).start();
     }
     @Override
     protected void onStart()
@@ -187,6 +186,8 @@ public class MainActivity extends Activity
      */
     private void onTrackStart()
     {
+//        if (!wakeLock.isHeld())
+//            wakeLock.acquire();
         showNotification();
     }
     /*
@@ -194,6 +195,8 @@ public class MainActivity extends Activity
      */
     private void onTrackStop()
     {
+//        if (wakeLock.isHeld())
+//            wakeLock.release();
         hideNotification();
     }
     /*
@@ -249,21 +252,23 @@ public class MainActivity extends Activity
                             WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
                     break;
                 case TRACK_CONTROL_START:
-                    currentTrack.start();
+                    currentTrack.cstart();
                     onTrackStart();
                     break;
                 case TRACK_CONTROL_PAUSE:
-                    currentTrack.pause();
+                    currentTrack.cpause();
                     break;
                 case TRACK_CONTROL_RESUME:
-                    currentTrack.resume();
+                    currentTrack.cresume();
                     break;
                 case TRACK_CONTROL_STOP:
-                    currentTrack.stop();
+                    currentTrack.cstop();
                     onTrackStop();
                     break;
                 case TRACK_UPDATE:
-                    if (currentTrack.state == Track.State.RECORD)
+                    if (currentTrack.state == Track.State.RECORD ||
+                        currentTrack.state == Track.State.GET_POSITION
+                            )
                     {
                         if (!wakeLock.isHeld())
                             wakeLock.acquire();
@@ -274,7 +279,7 @@ public class MainActivity extends Activity
 
                     if (currentTrack.state == Track.State.CANCEL ||
                         currentTrack.state == Track.State.DONE)
-                        currentTrack = new Track(MainActivity.this);
+                        currentTrack = (new Track(MainActivity.this)).launch();
                     webView.loadUrl("javascript:app.statusUpdate()");
                     break;
             }
