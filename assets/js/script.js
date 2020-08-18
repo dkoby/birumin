@@ -245,7 +245,8 @@ Application.prototype.switchScreenHold = function(value)
     }
     if (this.controls.screenHold.value)
     {
-        this.controls.screenHold.block.setInner("&#x2588");
+//        this.controls.screenHold.block.setInner("&#x2588");
+        this.controls.screenHold.block.setInner("&#x1F4A1");
     } else {
         this.controls.screenHold.block.setInner("&nbsp;");
     }

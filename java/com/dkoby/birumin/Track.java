@@ -316,9 +316,6 @@ public class Track {
         lastPoint = getLastPoint();
         if (lastPoint != null)
         {
-            if (lastPoint.altitude > altitude)
-                elevation += lastPoint.altitude - altitude;
-
             /*
              * set pi 3.1415926535897931
 
@@ -347,9 +344,12 @@ public class Track {
                 add = false;
 
             if (add)
+            {
                 distance += d;
+                if (lastPoint.altitude > altitude)
+                    elevation += lastPoint.altitude - altitude;
+            }
         }
-
 
         synchronized(this) {
             if (add)
@@ -383,7 +383,11 @@ public class Track {
 
         /* Get last known storage, should be ext_sd. */
         for (File dir: mainActivity.getExternalFilesDirs(null))
+        {
+            Log.i(MainActivity.TAG, "Dirs: " + dir);
             filesDir = dir;
+//            break;
+        }
         if (filesDir == null)
             throw new StoreException("No storage media");
 
