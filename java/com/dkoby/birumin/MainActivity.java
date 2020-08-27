@@ -265,6 +265,9 @@ public class MainActivity extends Activity
                     currentTrack.cstop();
                     onTrackStop();
                     break;
+                case TRACK_CONTROL_ADD_WPT:
+                    currentTrack.caddWpt();
+                    break;
                 case TRACK_UPDATE:
                     if (currentTrack.state == Track.State.RECORD ||
                         currentTrack.state == Track.State.GET_POSITION
@@ -272,6 +275,20 @@ public class MainActivity extends Activity
                     {
                         if (!wakeLock.isHeld())
                             wakeLock.acquire();
+                    } else if (currentTrack.state == Track.State.PAUSE) {
+                        (new Thread(
+                            new Runnable() {
+                                @Override
+                                public void run() {
+                                    try {
+                                        Thread.sleep(10000);
+                                        MainActivity.this.sendMessage(new MainMessage(MainMessage.MsgType.WAKELOCK));
+                                        MainActivity.this.sendMessage(new MainMessage(MainMessage.MsgType.TRACK_UPDATE));
+                                    } catch (Exception e) {
+                                    }
+                                }
+                            }
+                        )).start();
                     } else {
                         if (wakeLock.isHeld())
                             wakeLock.release();
@@ -281,6 +298,22 @@ public class MainActivity extends Activity
                         currentTrack.state == Track.State.DONE)
                         currentTrack = (new Track(MainActivity.this)).launch();
                     webView.loadUrl("javascript:app.statusUpdate()");
+                    break;
+                case WAKELOCK:
+                    {
+                        if (currentTrack.state == Track.State.PAUSE)
+                        {
+                            if (wakeLock.isHeld())
+                                wakeLock.release();
+
+                            if (!wakeLock.isHeld())
+                                wakeLock.acquire(500);
+                        }
+                    }
+                    break;
+                case DIALOG_INFO:
+                    String info = (String)mainMessage.obj;
+                    webView.loadUrl("javascript:app.dialogInfo(\"" + info + "\")");
                     break;
             }
         }
@@ -371,6 +404,13 @@ class WebAppInterface {
                 MainMessage.MsgType.SCREEN_ON, new Boolean(value)
         ));
     }
+    @JavascriptInterface
+    public void addWayPoint() {
+        mainActivity.sendMessage(new MainMessage(
+                MainMessage.MsgType.TRACK_CONTROL_ADD_WPT
+        ));
+    }
+
     /*
      *
      */

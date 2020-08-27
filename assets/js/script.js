@@ -179,6 +179,7 @@ var Application = function()
             /*
              * Controls:
              *     * Night mode.
+             *     * Waypoint.
              *     * Keep screen on.
              */
             mainPanel
@@ -191,6 +192,14 @@ var Application = function()
                                 app.switchNight();
                             });
                         })
+                    .mkSibling("button", ["control"], "&#x1F6A9")
+                        .apply(function(block) {
+                            app.controls.wayPoint = {};
+                            app.controls.wayPoint.block = block;
+                            block.addEvent("click", function() {
+                                app.addWayPoint();
+                            });
+                        }).disable()
                     .mkSibling("button", ["control"])
                         .apply(function(block) {
                             app.controls.screenHold = {};
@@ -206,6 +215,13 @@ var Application = function()
     this.switchScreenHold(false);
 
     this.applyData(null);
+}
+/*
+ *
+ */
+Application.prototype.addWayPoint = function()
+{
+    android.addWayPoint();
 }
 /*
  *
@@ -408,6 +424,7 @@ Application.prototype.statusUpdate = function()
             app.controls.pause.block.disable();
             app.controls.resume.block.disable();
             app.controls.stop.block.disable();
+            app.controls.wayPoint.block.disable();
             break;
         case "GET_POSITION":
             app.controls.record.block.removeClass("record");
@@ -415,6 +432,7 @@ Application.prototype.statusUpdate = function()
             app.controls.pause.block.disable();
             app.controls.resume.block.disable();
             app.controls.stop.block.enable();
+            app.controls.wayPoint.block.disable();
             break;
         case "RECORD"         :
             app.controls.record.block.addClass("record");
@@ -422,6 +440,7 @@ Application.prototype.statusUpdate = function()
             app.controls.pause.block.enable();
             app.controls.resume.block.disable();
             app.controls.stop.block.disable();
+            app.controls.wayPoint.block.enable();
             break;
         case "PAUSE"       :
             app.controls.record.block.addClass("record");
@@ -429,6 +448,7 @@ Application.prototype.statusUpdate = function()
             app.controls.pause.block.disable();
             app.controls.resume.block.enable();
             app.controls.stop.block.enable();
+            app.controls.wayPoint.block.enable();
             break;
         case "SAVE"        :
             app.controls.record.block.removeClass("record");
@@ -436,6 +456,7 @@ Application.prototype.statusUpdate = function()
             app.controls.pause.block.disable();
             app.controls.resume.block.disable();
             app.controls.stop.block.disable();
+            app.controls.wayPoint.block.disable();
             break;
         case "ERROR"       :
             app.controls.record.block.removeClass("record");
@@ -443,6 +464,7 @@ Application.prototype.statusUpdate = function()
             app.controls.pause.block.disable();
             app.controls.resume.block.disable();
             app.controls.stop.block.disable();
+            app.controls.wayPoint.block.disable();
             break;
         case "DONE"        :
             app.controls.record.block.removeClass("record");
@@ -450,6 +472,7 @@ Application.prototype.statusUpdate = function()
             app.controls.pause.block.disable();
             app.controls.resume.block.disable();
             app.controls.stop.block.disable();
+            app.controls.wayPoint.block.disable();
             break;
         case "CANCEL"       :
             app.controls.record.block.removeClass("record");
@@ -457,6 +480,7 @@ Application.prototype.statusUpdate = function()
             app.controls.pause.block.disable();
             app.controls.resume.block.disable();
             app.controls.stop.block.disable();
+            app.controls.wayPoint.block.disable();
             break;
 
     }
@@ -513,29 +537,53 @@ Application.prototype.statusUpdate = function()
 /*
  *
  */
+Application.prototype.dialogInfo = function(info)
+{
+    var dialog = new Dialog(info);
+    window.setTimeout(function() {
+        dialog.destroy();
+    }, 1000);
+}
+/*
+ *
+ */
 var Dialog = function(msg, callback)
 {
     var dialogBlock;
+
     new BlockElement("div", ["dialog"], document.body)
-        .apply(function(block) {
-            dialogBlock = block;
-        })
+    .apply(function(block) {
+        dialogBlock = block;
+    })
         .mkChild("div", [])
             .mkChild("div", [])
                 .mkChild("div", [], msg)
             .getParent()
             .mkSibling("div", [])
                 .mkChild("button", [], "OK")
+                .apply(function(block) {
+                    if (!callback)
+                        block.hide();
+                })
                 .addEvent("click", function() {
                     dialogBlock.destroy();
                     callback("yes");
                 })
                 .mkSibling("button", [], "Cancel")
+                .apply(function(block) {
+                    if (!callback)
+                        block.hide();
+                })
                 .addEvent("click", function() {
                     dialogBlock.destroy();
                     callback("no");
                 })
     ;
+
+    this.dialogBlock = dialogBlock;
+}
+Dialog.prototype.destroy = function() {
+    this.dialogBlock.destroy();
 }
 /*
  *

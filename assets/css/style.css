@@ -22,6 +22,9 @@ body {
 
     height: 100%;
 }
+.displayNone {
+    display: none;
+}
 .mainPanel {
     z-index: 0;
     position: fixed;

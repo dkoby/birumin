@@ -31,7 +31,7 @@ import java.io.FileOutputStream;
  */
 public class Track {
     private static long POINT_TIMEOUT      = 15000;
-    private static final long  MINTIME     = 200; /* ms */
+    private static final long  MINTIME     = 1000; /* ms */
     private static final float MINDISTANCE = 0;   /* m */
 
     /*
@@ -61,6 +61,7 @@ public class Track {
 
     private MainActivity mainActivity;
     private ArrayList<Point> points;
+    private ArrayList<Point> wayPoints;
     private Track.LocationListener locationListener;
     private LocationManager locationManager;
 
@@ -72,6 +73,7 @@ public class Track {
     public Track(MainActivity mainActivity) {
         this.mainActivity = mainActivity;
         points = new ArrayList<Point>(3600);
+        wayPoints = new ArrayList<Point>(100);
 
         state = Track.State.NEW;
 
@@ -146,6 +148,18 @@ public class Track {
                             ready = false;
                             looper.quit();
                             break;
+                        case TRACK_CONTROL_ADD_WPT:
+                            Point lastPoint = getLastPoint();
+                            if (lastPoint != null)
+                            {
+                                wayPoints.add(lastPoint);
+                                mainActivity.sendMessage(
+                                        new MainMessage(
+                                            MainMessage.MsgType.DIALOG_INFO,
+                                            new String("Waypoint was added")
+                                            ));
+                            }
+                            break;
                         case TRACK_POINT_TIMEOUT:
                             stopUpdates();
                             /* XXX deffer? */
@@ -161,6 +175,12 @@ public class Track {
 
             Looper.loop();
         }
+    }
+    /*
+     *
+     */
+    public void caddWpt() {
+        trackLoop.sendMessage(new TrackMessage(TrackMessage.MessageType.TRACK_CONTROL_ADD_WPT));
     }
     /*
      *
@@ -227,7 +247,14 @@ public class Track {
         if (state != Track.State.GET_POSITION && state != Track.State.PAUSE)
             return;
 
+        Point lastPoint = getLastPoint();
+        if (lastPoint != null)
+        {
+            lastPoint.resume = true;
+        }
+
         startUpdates();
+
 
         if (state == Track.State.PAUSE)
             state = Track.State.RECORD;
@@ -397,6 +424,12 @@ public class Track {
             filesDir.mkdir();
 
         storeData(filesDir);
+
+        mainActivity.sendMessage(
+                new MainMessage(
+                    MainMessage.MsgType.DIALOG_INFO,
+                    new String("Store success")
+                    ));
     }
     /*
      *
@@ -422,6 +455,24 @@ public class Track {
             xw.write(new SimpleDateFormat(dateFormat).format(date));
             xw.writeln("</time>");
             xw.writeln("</metadata>");
+            synchronized (Track.this) {
+                for (Point point: wayPoints)
+                {
+                    Date pointDate = new Date(point.time);
+
+                    xw.write("    <wpt");
+                    xw.write(" lat=\"");
+                    xw.write(String.valueOf(point.latitude));
+                    xw.write("\"");
+                    xw.write(" lon=\"");
+                    xw.write(String.valueOf(point.longitude));
+                    xw.writeln("\">");
+                    xw.write("        <time>");
+                    xw.write(new SimpleDateFormat(dateFormat).format(pointDate));
+                    xw.writeln("</time>");
+                    xw.writeln("    </wpt>");
+                }
+            }
             xw.writeln("<trk>");
             xw.writeln("<name>Ride</name>");
             xw.writeln("<type>1</type>");
@@ -429,6 +480,12 @@ public class Track {
             synchronized (Track.this) {
                 for (Point point: points)
                 {
+                    if (point.resume)
+                    {
+                        xw.writeln("</trkseg>");
+                        xw.writeln("<trkseg>");
+                    }
+
                     Date pointDate = new Date(point.time);
 
                     xw.write("    <trkpt");
@@ -499,6 +556,8 @@ public class Track {
         public double altitude; /* meters. */
         public float speed; /* m/sec. */
         public long time; /* ms */
+        public boolean resume;
+
         public Point(
                 double latitude,
                 double longitude,

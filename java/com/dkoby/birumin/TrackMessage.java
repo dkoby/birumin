@@ -29,6 +29,7 @@ public class TrackMessage {
         TRACK_CONTROL_RESUME,
         TRACK_CONTROL_PAUSE,
         TRACK_CONTROL_STOP,
+        TRACK_CONTROL_ADD_WPT,
         TRACK_POINT_TIMEOUT,
         TRACK_UPDATE,
     }
